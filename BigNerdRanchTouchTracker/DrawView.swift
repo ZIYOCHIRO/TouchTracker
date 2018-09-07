@@ -9,8 +9,11 @@
 import UIKit
 
 class DrawView: UIView {
+    // MARK: Properties
     var currentLines = [NSValue:Line]()
     var finishedLines = [Line]()
+    var selectedLineIndex: Int?
+    
     @IBInspectable var finishedLineColor: UIColor = UIColor.black {
         didSet {
             setNeedsDisplay()
@@ -26,7 +29,6 @@ class DrawView: UIView {
             setNeedsDisplay()
         }
     }
-    
 
     func strokeLine(line: Line) {
         let path = UIBezierPath()
@@ -36,6 +38,27 @@ class DrawView: UIView {
         path.move(to: line.begin)
         path.addLine(to: line.end)
         path.stroke()
+    }
+    // get the closest line to the point by calculate their distance
+    func indexOfLine(at point: CGPoint) -> Int? {
+        // Find a line close to point
+        for (index, line) in finishedLines.enumerated() {
+            let begin = line.begin
+            let end = line.end
+            
+            // check a few points on the line
+            for t in stride(from: CGFloat(0), to: 1.0, by: 0.05) {
+                let x = begin.x + ((end.x - begin.x) * t)
+                let y = begin.y + ((end.y - begin.y) * t)
+                
+                // if  the tapped point is within 20 points, let's return this line
+                if hypot(x - point.x, y - point.y) < 20 {
+                    return index
+                }
+            }
+        }
+        // If nothing is close enough to the tapped point, then we did not select a line
+        return nil
     }
     
     override func draw(_ rect: CGRect) {
@@ -49,6 +72,12 @@ class DrawView: UIView {
         currentLineColor.setStroke()
         for (_, line) in currentLines {
             strokeLine(line: line)
+        }
+        
+        if let index = selectedLineIndex {
+            UIColor.green.setStroke()
+            let selectedLine = finishedLines[index]
+            strokeLine(line: selectedLine)
         }
     }
     
@@ -106,6 +135,39 @@ class DrawView: UIView {
         print(#function)
         
         currentLines.removeAll()
+        
+        setNeedsDisplay()
+    }
+    
+    //  instantiate a UITapGestureRecognizer that requires two taps
+    required init?(coder aDecoder: NSCoder) {
+        super.init(coder: aDecoder)
+        
+        let doubleTapRecognizer = UITapGestureRecognizer(target: self, action: #selector(DrawView.doubleTap(gestureRecognizer:)))
+        doubleTapRecognizer.numberOfTapsRequired = 2
+        doubleTapRecognizer.delaysTouchesBegan = true
+        addGestureRecognizer(doubleTapRecognizer)
+        
+        let singleTapRecognizer = UITapGestureRecognizer(target: self, action: #selector(DrawView.singleTap(gestureRecognizer:)))
+        singleTapRecognizer.numberOfTapsRequired = 1
+        singleTapRecognizer.require(toFail: doubleTapRecognizer)
+        addGestureRecognizer(singleTapRecognizer)
+    }
+    
+    @objc func doubleTap(gestureRecognizer: UIGestureRecognizer) {
+        
+        print("Recognized a double tap")
+        
+        selectedLineIndex = nil
+        currentLines.removeAll()
+        finishedLines.removeAll()
+        setNeedsDisplay()
+    }
+    @objc func singleTap(gestureRecognizer: UIGestureRecognizer) {
+        print("Recognized a tap")
+        
+        let point = gestureRecognizer.location(in: self)
+        selectedLineIndex = indexOfLine(at: point)
         
         setNeedsDisplay()
     }
